@@ -18,22 +18,7 @@ var fixtures = [
   { id: "12", team1: "T1", team2: "T2", status: "0", tournamentId: "5", result: "Not yet started", venue: "Swargate", time : '30-07-2019' },
   { id: "13", team1: "T4", team2: "T2", status: "0", tournamentId: "1", result: "Not yet started", venue: "Kharadi", time : '30-07-2019' }
 ];
-const pointsTable = [
-  { id: "1", team: "T1", points: "2", tournamentId: "1"},
-  { id: "2", team: "T2", points: "4", tournamentId: "2"},
-  { id: "3", team: "T4", points: "0", tournamentId: "1" },
-  { id: "4", team: "T1", points: "10", tournamentId: "1"},
-  { id: "4", team: "T3", points: "6", tournamentId: "3"},
-  { id: "5", team: "T2", points: "2", tournamentId: "3"},
-  { id: "6", team: "T7", points: "4", tournamentId: "1"},
-  { id: "7", team: "T2", points: "2", tournamentId: "4"},
-  { id: "8", team: "T2", points: "6", tournamentId: "4"},
-  { id: "9", team: "T6", points: "2", tournamentId: "1"},
-  { id: "10", team: "T1", points: "10", tournamentId: "5"},
-  { id: "11", team: "T4", points: "2", tournamentId: "5"},
-  { id: "12", team: "T1", points: "4", tournamentId: "5"},
-  { id: "13", team: "T4", points: "4", tournamentId: "1"}
-];
+
 var liveMatches = [
   { id : 1, teamBat1: 'Team Adali', teamBat2:'Team Malewad', venue: 'Malewad', tournamentId: '1'},
   { id : 2, teamBat1: 'Team Bhedshi', teamBat2:'Team Adali', venue: 'Adali', tournamentId: '4'},
@@ -52,7 +37,6 @@ router.get('/tournaments', function(req, res, next) {
 });
 
 router.get('/myTournaments', function(req, res, next) {
-  console.log(req.query.teamId);
   db.simpleQuery("SELECT * FROM TOURNAMENTS WHERE TEAMID = ?",req.query.teamId).then( tournaments => res.json(tournaments))
 });
 
@@ -67,24 +51,48 @@ router.delete('/tournaments/:id', async function(req, res, next) {
   (err) => next(err)
 )
 });
-router.patch('/tournaments', function(req, res, next) {
+router.patch('/tournaments/:id', function(req, res, next) {
   let value = req.body;
-  db.simpleQuery(`UPDATE tournaments SET name='${value.name}',playerCount=${value.name},
-  entryFee=${value.name},reEntryFee=${value.name},firstPrize='${value.name}',
-  secondPrize='${value.name}',startDate='${value.name}',endDate='${value.name}',
-  time='${value.name}' WHERE id = ?`,req.params.id).then(
+  db.simpleQuery(`UPDATE tournaments SET name='${value.name}',playerCount=${value.playerCount},
+  entryFee=${value.entryFee},reEntryFee=${value.reEntryFee},firstPrize='${value.prize1}',
+  secondPrize='${value.prize2}',startDate='${value.startDate}',endDate='${value.endDate}',
+  time='${value.time}' WHERE id = ?`,req.params.id).then(
   () => res.json({message:'Tournament updated successfully!'}),
   (err) => next(err)
   )
 });
-router.get('/fixtures', function(req, res, next) {
-  let fixtureArray = fixtures.filter( fixture => fixture.tournamentId == req.query.tournamentId);
-  res.json(fixtureArray);
+router.get('/fixtures/:id', function(req, res, next) {
+  console.log('fixtures ',req.params.id)
+  db.simpleQuery("SELECT * FROM fixtures WHERE tournamentId = ?",req.params.id).then( fixtures => res.json(fixtures))
+});
+router.delete('/fixtures/:id', function(req, res, next) {
+  db.simpleQuery("DELETE FROM fixtures WHERE id = ?",req.params.id).then(
+    () => res.json({message:'Fixture deleted successfully!'}),
+    (err) => next(err)
+  )
 });
 
-router.get('/pointsTable', function(req, res, next) {
-  let pointsTableArray = pointsTable.filter( p => p.tournamentId == req.query.tournamentId);
-  res.json(pointsTableArray);
+router.post('/fixtures', function(req, res, next) {
+  let value = req.body;
+  db.simpleQuery(`INSERT INTO fixtures (team1Id, team1Name, team2Id, team2Name, date, time, 
+    tournamentId) VALUES
+  ('${value.team1Id}','${value.team1Name}','${value.team2Id}','${value.team2Name}','${value.date}','${value.time}',
+    ${value.tournamentId})
+  `).then(
+    () => res.json({message:'fixtures added!'}),
+    (err) => next(err)
+    )
+});
+
+router.patch('/fixtures/changeStatus/:id', function(req, res, next) {
+  db.simpleQuery(`UPDATE fixtures SET status='${req.body.status}' WHERE id = ?`,req.params.id).then(
+  () => res.json({message:'Fixture updated!'}),
+  (err) => next(err)
+  )
+});
+
+router.get('/pointsTable/:id', function(req, res, next) {
+  db.simpleQuery("SELECT * FROM points_table WHERE tournamentId = ?",req.params.id).then( pointsTable => res.json(pointsTable));
 });
 
 router.post('/save', function(req, res, next) {
@@ -99,6 +107,46 @@ router.post('/save', function(req, res, next) {
     (err) => next(err)
   )
 
+});
+
+router.post('/joinRequest', function(req, res, next) {
+  let value = req.body;
+  db.simpleQuery("SELECT * FROM join_requests WHERE fromTeamId = ? AND toTournamentId = ?",value.fromTeamId, value.toTournamentId).then(
+    (requests) => {
+      if(requests.length) next({message:"You have already sent a request for this tournament.",status: 409});
+      else {
+        db.simpleQuery(`INSERT INTO join_requests (fromTeamId, fromTeamName, toTournamentId, toTournamentName, toTeamId) VALUES
+        ('${value.fromTeamId}','${value.fromTeamName}','${value.toTournamentId}', '${value.toTournamentName}', '${value.toTeamId}')
+        `).then(
+          () => res.json({message:'Join request sent'}),
+          (err) => next(err)
+        )
+      }
+    }
+  )
+});
+
+router.post('/acceptRequest', async function(req, res, next) {
+  let value = req.body;
+  let acceptResp = await db.simpleQuery(`UPDATE join_requests SET status='accepted' where id = ?`,value.id);
+  let pointsTable = await db.simpleQuery(`INSERT INTO points_table (teamId, teamName, tournamentId) VALUES
+    ('${value.teamId}','${value.teamName}','${value.tournamentId}')
+  `)
+  res.json({message:'Team added to the tournament'});
+});
+
+router.get('/joinRequest/:toTeamId', function(req, res, next) {
+  db.simpleQuery("SELECT * FROM join_requests WHERE toTeamId = ?",req.params.toTeamId).then(
+    (requests) => res.json(requests),
+    (err) => next(err)
+  )
+});
+
+router.delete('/joinRequest/:id', function(req, res, next) {
+  db.simpleQuery("DELETE FROM join_requests WHERE id = ?",req.params.id).then(
+    () => res.json({message:'Join request rejected'}),
+    (err) => next(err)
+  )
 });
 
 module.exports = router;
